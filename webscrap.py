@@ -8,76 +8,89 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import time
 
-# ✅ Edge driver path
-edge_driver_path = ''
-options = webdriver.EdgeOptions()
-options.use_chromium = True
-driver = webdriver.Edge(service=Service(edge_driver_path), options=options)
+service = Service()  # ระบุ path ถ้าไม่ได้ใส่ ChromeDriver ใน PATH
+options = webdriver.ChromeOptions()
+driver = webdriver.Chrome(service=service, options=options)
 
-# ✅ ค้นหา "วิศวกรรมคอมพิวเตอร์"
-driver.get("https://mytcas.com")
-search_box = WebDriverWait(driver, 10).until(
-    EC.presence_of_element_located((By.CSS_SELECTOR, "input[placeholder*='พิมพ์ชื่อสถาบัน']"))
-)
-search_box.send_keys("วิศวกรรมคอมพิวเตอร์")
-time.sleep(1)
-search_box.send_keys(Keys.ARROW_DOWN)
-search_box.send_keys(Keys.ENTER)
+search_keywords = [
+    "วิศวกรรมคอมพิวเตอร์",
+    "วิศวกรรมปัญญาประดิษฐ์"
+]
 
-# ✅ รอโหลดผลลัพธ์
-WebDriverWait(driver, 10).until(
-    EC.presence_of_all_elements_located((By.CSS_SELECTOR, "a[href*='/programs/']"))
-)
-time.sleep(2)
+all_data = []
 
-# ✅ ดึงลิงก์ของแต่ละหลักสูตร
-program_links = driver.find_elements(By.CSS_SELECTOR, "a[href*='/programs/']")
-program_urls = [link.get_attribute("href") for link in program_links]
+for keyword in search_keywords:
+    print(f"\n🔎 ค้นหา: {keyword}")
+    driver.get("https://mytcas.com")
 
-print(f"📦 พบหลักสูตร {len(program_urls)} รายการ เตรียมดึงข้อมูล...")
+    # 🔍 ค้นหาช่อง input
+    search_box = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, "input[placeholder*='พิมพ์ชื่อสถาบัน']"))
+    )
+    search_box.clear()
 
-data = []
+    # 🧠 ส่งข้อความทีละตัวเพื่อให้เว็บ trigger dropdown
+    for char in keyword:
+        search_box.send_keys(char)
+        time.sleep(0.1)
 
-# ✅ วนเข้าไปดึงข้อมูลจากแต่ละหลักสูตร
-for url in program_urls:
-    driver.get(url)
+    # ⏳ รอ dropdown โหลด แล้วกดลง + enter
+    time.sleep(1.5)
+    search_box.send_keys(Keys.ARROW_DOWN)
+    search_box.send_keys(Keys.ENTER)
+
+    # รอโหลดผลลัพธ์
+    WebDriverWait(driver, 15).until(
+        EC.presence_of_all_elements_located((By.CSS_SELECTOR, "a[href*='/programs/']"))
+    )
     time.sleep(2)
 
-    html = driver.page_source
-    soup = BeautifulSoup(html, 'html.parser')
+    program_links = driver.find_elements(By.CSS_SELECTOR, "a[href*='/programs/']")
+    program_urls = [link.get_attribute("href") for link in program_links]
+    print(f"📦 พบ {len(program_urls)} หลักสูตร สำหรับ \"{keyword}\"")
 
-    # 🏫 ชื่อมหาวิทยาลัย
-    university_name = 'ไม่พบชื่อมหาวิทยาลัย'
-    logo_img = soup.find('img', src=lambda s: s and 'assets.mytcas.com/i/logo' in s)
-    if logo_img and logo_img.has_attr('alt'):
-        university_name = logo_img['alt']
+    for url in program_urls:
+        try:
+            driver.get(url)
+            time.sleep(2)
+            html = driver.page_source
+            soup = BeautifulSoup(html, 'html.parser')
 
-    # 🎓 ชื่อหลักสูตร
-    program_name_th = 'ไม่พบชื่อหลักสูตร'
-    program_dd = soup.find_all('dd')
-    if len(program_dd) >= 1:
-        program_name_th = program_dd[0].get_text(strip=True)
+            # 🏫 มหาวิทยาลัย
+            logo_img = soup.find('img', src=lambda s: s and 'assets.mytcas.com/i/logo' in s)
+            university_name = logo_img['alt'] if logo_img and logo_img.has_attr('alt') else 'ไม่พบชื่อมหาวิทยาลัย'
 
-    # 💸 ค่าใช้จ่าย
-    tuition_fee = 'ไม่พบข้อมูลค่าใช้จ่าย'
-    dt_tag = soup.find('dt', string='ค่าใช้จ่าย')
-    if dt_tag:
-        dd_tag = dt_tag.find_next_sibling('dd')
-        if dd_tag:
-            tuition_fee = dd_tag.get_text(strip=True)
+            # 🎓 ชื่อหลักสูตร
+            program_dd = soup.find_all('dd')
+            program_name_th = program_dd[0].get_text(strip=True) if len(program_dd) >= 1 else 'ไม่พบชื่อหลักสูตร'
 
-    data.append({
-        'ชื่อมหาวิทยาลัย': university_name,
-        'ชื่อหลักสูตร': program_name_th,
-        'ค่าใช้จ่าย': tuition_fee,
-        'ลิงก์': url
-    })
+            # 💸 ค่าใช้จ่าย
+            dt_tag = soup.find('dt', string='ค่าใช้จ่าย')
+            dd_tag = dt_tag.find_next_sibling('dd') if dt_tag else None
+            tuition_fee = dd_tag.get_text(strip=True) if dd_tag else 'ไม่พบข้อมูลค่าใช้จ่าย'
+
+            # 📍 วิทยาเขต
+            dt_campus = soup.find('dt', string='วิทยาเขต')
+            dd_campus = dt_campus.find_next_sibling('dd') if dt_campus else None
+            campus = dd_campus.get_text(strip=True) if dd_campus else 'ไม่พบข้อมูลวิทยาเขต'
+
+            all_data.append({
+                'คำค้น': keyword,
+                'ชื่อมหาวิทยาลัย': university_name,
+                'ชื่อหลักสูตร': program_name_th,
+                'วิทยาเขต': campus,
+                'ค่าใช้จ่าย': tuition_fee,
+                'ลิงก์': url
+            })
+            
+        except Exception as e:
+            print(f"❌ เกิดข้อผิดพลาดที่ {url} → {e}")
+            continue
 
 # ✅ ปิด browser
 driver.quit()
 
-# ✅ สร้าง DataFrame แล้วบันทึก Excel
-df = pd.DataFrame(data)
-output_path = 'tcas_computer_engineering.xlsx'
-df.to_excel(output_path, index=False)
-print(f"\n✅ บันทึกข้อมูลเรียบร้อยแล้ว: {output_path}")
+# ✅ บันทึก Excel
+df = pd.DataFrame(all_data)
+df.to_excel("tcas_multi_keywords.xlsx", index=False)
+print("\n✅ ดึงข้อมูลเสร็จและบันทึกลงไฟล์เรียบร้อยแล้ว!")
