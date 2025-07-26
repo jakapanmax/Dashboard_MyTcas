@@ -92,5 +92,5 @@ driver.quit()
 
 # ✅ บันทึก Excel
 df = pd.DataFrame(all_data)
-df.to_excel("tcas_multi_keywords.xlsx", index=False)
+df.to_excel("tcas_data.xlsx", index=False)
 print("\n✅ ดึงข้อมูลเสร็จและบันทึกลงไฟล์เรียบร้อยแล้ว!")
