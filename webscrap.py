@@ -8,12 +8,10 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import time
 
-
 # Specify path if ChromeDriver is not in PATH
 service = Service()
 options = webdriver.ChromeOptions()
 driver = webdriver.Chrome(service=service, options=options)
-
 
 # List of search keywords (Thai program names)
 search_keywords = [
@@ -21,10 +19,8 @@ search_keywords = [
     "วิศวกรรมปัญญาประดิษฐ์"
 ]
 
-
 # List to store all extracted data
 all_data = []
-
 
 for keyword in search_keywords:
     print(f"\n🔎 Searching: {keyword}")
